@@ -19,6 +19,8 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const feedRoutes = require('./routes/feedRoutes');
 const dmRoutes = require('./routes/dmRoutes');
+const connectionRoutes = require('./routes/connectionRoutes');
+const profileRoutes = require('./routes/profileRoutes');
 
 const app = express();
 
@@ -39,6 +41,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/messages', dmRoutes);
+app.use('/api/connexions', connectionRoutes);
+app.use('/api/profil', profileRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'API ESP Digital opérationnelle.' }));
 

@@ -1,5 +1,6 @@
 const { Post, PostLike, PostComment, User, Structure, Adhesion } = require('../models');
 const { Op } = require('sequelize');
+const { creerNotification } = require('../utils/notify');
 
 // Extrait les hashtags (#mot) d'un texte, sans le '#'.
 const extraireHashtags = (texte) => {
@@ -7,19 +8,30 @@ const extraireHashtags = (texte) => {
   return [...new Set(matches.map((h) => h.slice(1).toLowerCase()))];
 };
 
-const formatPost = (post, userId) => ({
-  id: post.id,
-  contenu: post.contenu,
-  image: post.image,
-  hashtags: post.hashtags || [],
-  lieu: post.lieu,
-  createdAt: post.createdAt,
-  auteur: post.auteur,
-  structure: post.structure,
-  nombreLikes: post.likes ? post.likes.length : 0,
-  aimeParMoi: userId ? (post.likes || []).some((l) => l.user_id === userId) : false,
-  nombreCommentaires: post.commentaires ? post.commentaires.length : 0,
-});
+const REACTIONS = ['jaime', 'jadore', 'bravo', 'super'];
+
+const formatPost = (post, userId) => {
+  const likes = post.likes || [];
+  const parType = {};
+  REACTIONS.forEach((t) => { parType[t] = 0; });
+  likes.forEach((l) => { parType[l.type] = (parType[l.type] || 0) + 1; });
+  const maReaction = userId ? likes.find((l) => l.user_id === userId)?.type || null : null;
+
+  return {
+    id: post.id,
+    contenu: post.contenu,
+    image: post.image,
+    hashtags: post.hashtags || [],
+    lieu: post.lieu,
+    createdAt: post.createdAt,
+    auteur: post.auteur,
+    structure: post.structure,
+    nombreLikes: likes.length,
+    reactionsParType: parType,
+    maReaction,
+    nombreCommentaires: post.commentaires ? post.commentaires.length : 0,
+  };
+};
 
 // GET /api/feed — fil de campus (public en lecture, enrichi si connecté)
 exports.getFeed = async (req, res) => {
@@ -29,9 +41,9 @@ exports.getFeed = async (req, res) => {
 
     const { rows, count } = await Post.findAndCountAll({
       include: [
-        { model: User, as: 'auteur', attributes: ['id', 'nom', 'prenom', 'photo'] },
+        { model: User, as: 'auteur', attributes: ['id', 'nom', 'prenom', 'photo', 'role'] },
         { model: Structure, as: 'structure', attributes: ['id', 'nom', 'logo'] },
-        { model: PostLike, as: 'likes', attributes: ['user_id'] },
+        { model: PostLike, as: 'likes', attributes: ['user_id', 'type'] },
         { model: PostComment, as: 'commentaires', attributes: ['id'] },
       ],
       order: [['createdAt', 'DESC']],
@@ -40,7 +52,23 @@ exports.getFeed = async (req, res) => {
       distinct: true,
     });
 
-    const posts = rows.map((p) => formatPost(p, req.user?.id));
+    // Calcule en une seule requête quels auteurs sont présidents d'une structure active,
+    // pour afficher un badge "vérifié" sans multiplier les requêtes par publication.
+    const auteurIds = [...new Set(rows.map((p) => p.auteur?.id).filter(Boolean))];
+    const presidents = await Adhesion.findAll({
+      where: { user_id: { [Op.in]: auteurIds }, role_structure: 'president', statut: 'active' },
+      attributes: ['user_id'],
+    });
+    const idsPresidents = new Set(presidents.map((p) => p.user_id));
+
+    const posts = rows.map((p) => {
+      const formate = formatPost(p, req.user?.id);
+      if (formate.auteur) {
+        formate.auteur.verifie = formate.auteur.role === 'admin' || idsPresidents.has(formate.auteur.id);
+      }
+      return formate;
+    });
+
     return res.json({ posts, total: count, page, totalPages: Math.ceil(count / limit) });
   } catch (error) {
     return res.status(500).json({ message: 'Erreur lors de la récupération du fil.', error: error.message });
@@ -80,10 +108,29 @@ exports.createPost = async (req, res) => {
       include: [
         { model: User, as: 'auteur', attributes: ['id', 'nom', 'prenom', 'photo'] },
         { model: Structure, as: 'structure', attributes: ['id', 'nom', 'logo'] },
-        { model: PostLike, as: 'likes', attributes: ['user_id'] },
+        { model: PostLike, as: 'likes', attributes: ['user_id', 'type'] },
         { model: PostComment, as: 'commentaires', attributes: ['id'] },
       ],
     });
+
+    // Détecte les mentions "@Prenom" dans le texte et notifie les utilisateurs correspondants.
+    const prenomsMentionnes = [...new Set((contenu.match(/@[\p{L}]+/gu) || []).map((m) => m.slice(1).toLowerCase()))];
+    if (prenomsMentionnes.length > 0) {
+      const utilisateursMentionnes = await User.findAll({
+        where: { id: { [Op.ne]: req.user.id } },
+      });
+      for (const u of utilisateursMentionnes) {
+        if (prenomsMentionnes.includes(u.prenom.toLowerCase())) {
+          await creerNotification({
+            userId: u.id,
+            titre: 'Vous avez été mentionné(e)',
+            message: `${req.user.prenom} ${req.user.nom} vous a mentionné(e) dans une publication.`,
+            categorie: 'mention',
+            lien: '/fil',
+          });
+        }
+      }
+    }
 
     return res.status(201).json({ message: 'Publication envoyée.', post: formatPost(postComplet, req.user.id) });
   } catch (error) {
@@ -105,21 +152,42 @@ exports.deletePost = async (req, res) => {
   }
 };
 
-// POST /api/feed/:id/like — bascule le like (aimer / ne plus aimer)
+// POST /api/feed/:id/like — { type: 'jaime'|'jadore'|'bravo'|'super' } : pose,
+// change ou retire (si même type renvoyé) sa réaction sur une publication.
 exports.toggleLike = async (req, res) => {
   try {
     const postId = req.params.id;
+    const type = REACTIONS.includes(req.body.type) ? req.body.type : 'jaime';
+
     const existant = await PostLike.findOne({ where: { post_id: postId, user_id: req.user.id } });
 
-    if (existant) {
+    if (existant && existant.type === type) {
       await existant.destroy();
-      return res.json({ liked: false });
+      return res.json({ maReaction: null });
     }
 
-    await PostLike.create({ post_id: postId, user_id: req.user.id });
-    return res.json({ liked: true });
+    if (existant) {
+      existant.type = type;
+      await existant.save();
+      return res.json({ maReaction: type });
+    }
+
+    await PostLike.create({ post_id: postId, user_id: req.user.id, type });
+
+    const post = await Post.findByPk(postId);
+    if (post && post.user_id !== req.user.id) {
+      await creerNotification({
+        userId: post.user_id,
+        titre: 'Nouvelle réaction',
+        message: `${req.user.prenom} ${req.user.nom} a réagi à votre publication.`,
+        categorie: 'reaction',
+        lien: '/fil',
+      });
+    }
+
+    return res.json({ maReaction: type });
   } catch (error) {
-    return res.status(500).json({ message: 'Erreur lors du like.', error: error.message });
+    return res.status(500).json({ message: 'Erreur lors de la réaction.', error: error.message });
   }
 };
 

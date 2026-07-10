@@ -1,26 +1,64 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api/axiosInstance';
 import { useAuth } from '../context/AuthContext';
+import VerifiedBadge from './VerifiedBadge';
+
+const REACTIONS = [
+  { type: 'jaime', emoji: '👍', label: 'J’aime' },
+  { type: 'jadore', emoji: '❤️', label: 'J’adore' },
+  { type: 'bravo', emoji: '👏', label: 'Bravo' },
+  { type: 'super', emoji: '🎉', label: 'Super' },
+];
 
 export default function PostCard({ post, onDeleted }) {
   const { user } = useAuth();
-  const [liked, setLiked] = useState(post.aimeParMoi);
-  const [nombreLikes, setNombreLikes] = useState(post.nombreLikes);
+  const [maReaction, setMaReaction] = useState(post.maReaction || null);
+  const [reactionsParType, setReactionsParType] = useState(post.reactionsParType || {});
+  const [nombreLikes, setNombreLikes] = useState(post.nombreLikes || 0);
+  const [showPicker, setShowPicker] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [nombreCommentaires, setNombreCommentaires] = useState(post.nombreCommentaires);
+  const hideTimer = useRef(null);
 
-  const toggleLike = async () => {
+  const appliquerReaction = async (type) => {
     if (!user) return;
-    setLiked((l) => !l);
-    setNombreLikes((n) => (liked ? n - 1 : n + 1));
-    try {
-      await api.post(`/feed/${post.id}/like`);
-    } catch {
-      setLiked((l) => !l);
-      setNombreLikes((n) => (liked ? n + 1 : n - 1));
+    setShowPicker(false);
+
+    const ancienneReaction = maReaction;
+    const ancienCompteur = { ...reactionsParType };
+    const ancienTotal = nombreLikes;
+
+    const nouveauCompteur = { ...reactionsParType };
+    if (ancienneReaction) nouveauCompteur[ancienneReaction] = Math.max(0, (nouveauCompteur[ancienneReaction] || 0) - 1);
+    let nouveauTotal = ancienneReaction ? nombreLikes - 1 : nombreLikes;
+    let nouvelleReaction = null;
+    if (ancienneReaction !== type) {
+      nouveauCompteur[type] = (nouveauCompteur[type] || 0) + 1;
+      nouveauTotal += 1;
+      nouvelleReaction = type;
     }
+    setReactionsParType(nouveauCompteur);
+    setNombreLikes(nouveauTotal);
+    setMaReaction(nouvelleReaction);
+
+    try {
+      await api.post(`/feed/${post.id}/like`, { type });
+    } catch {
+      setReactionsParType(ancienCompteur);
+      setNombreLikes(ancienTotal);
+      setMaReaction(ancienneReaction);
+    }
+  };
+
+  const ouvrirPicker = () => {
+    clearTimeout(hideTimer.current);
+    setShowPicker(true);
+  };
+  const fermerPickerDifferee = () => {
+    hideTimer.current = setTimeout(() => setShowPicker(false), 300);
   };
 
   const loadComments = async () => {
@@ -59,15 +97,21 @@ export default function PostCard({ post, onDeleted }) {
 
   const auteurNom = post.structure ? post.structure.nom : `${post.auteur?.prenom} ${post.auteur?.nom}`;
   const auteurPhoto = post.structure?.logo || post.auteur?.photo;
+  const reactionActive = REACTIONS.find((r) => r.type === maReaction);
+  const typesUtilises = REACTIONS.filter((r) => (reactionsParType?.[r.type] || 0) > 0);
 
   return (
     <div className="card p-5 space-y-3">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300 font-bold text-sm">
+        <Link to={post.structure ? `/structures/${post.structure.id}` : `/profil/${post.auteur?.id}`} className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300 font-bold text-sm">
           {auteurPhoto ? <img src={auteurPhoto} alt={auteurNom} className="h-full w-full object-cover" /> : auteurNom?.[0]}
-        </div>
+        </Link>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm text-gray-900 dark:text-white">{auteurNom}</p>
+          <p className="font-semibold text-sm text-gray-900 dark:text-white flex items-center gap-1">
+            <Link to={post.structure ? `/structures/${post.structure.id}` : `/profil/${post.auteur?.id}`} className="hover:underline">{auteurNom}</Link>
+            {post.auteur?.verifie && <VerifiedBadge />}
+          </p>
+          {post.auteur?.bio && <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{post.auteur.bio}</p>}
           <p className="text-xs text-gray-400">
             {post.auteur?.prenom} {post.auteur?.nom} · {new Date(post.createdAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
           </p>
@@ -98,10 +142,41 @@ export default function PostCard({ post, onDeleted }) {
         );
       })()}
 
+      {typesUtilises.length > 0 && (
+        <div className="flex items-center gap-1 text-xs text-gray-400">
+          <span className="flex -space-x-1">
+            {typesUtilises.map((r) => (
+              <span key={r.type} className="flex h-4 w-4 items-center justify-center rounded-full bg-white dark:bg-gray-800 text-[10px] ring-1 ring-white dark:ring-gray-800">{r.emoji}</span>
+            ))}
+          </span>
+          <span>{nombreLikes}</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-5 pt-2 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
-        <button onClick={toggleLike} disabled={!user} className={`flex items-center gap-1.5 transition ${liked ? 'text-red-500' : 'hover:text-red-500'}`}>
-          <span>{liked ? '❤️' : '🤍'}</span> {nombreLikes}
-        </button>
+        <div className="relative" onMouseEnter={ouvrirPicker} onMouseLeave={fermerPickerDifferee}>
+          {showPicker && user && (
+            <div className="absolute bottom-full left-0 mb-1 flex gap-1 rounded-full bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700 px-2 py-1.5 z-10">
+              {REACTIONS.map((r) => (
+                <button
+                  key={r.type}
+                  onClick={() => appliquerReaction(r.type)}
+                  title={r.label}
+                  className="text-xl hover:scale-125 transition-transform"
+                >
+                  {r.emoji}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => appliquerReaction(maReaction || 'jaime')}
+            disabled={!user}
+            className={`flex items-center gap-1.5 transition ${reactionActive ? 'text-primary-600 font-semibold' : 'hover:text-primary-600'}`}
+          >
+            <span>{reactionActive ? reactionActive.emoji : '👍'}</span> {reactionActive ? reactionActive.label : 'J’aime'}
+          </button>
+        </div>
         <button onClick={loadComments} className="flex items-center gap-1.5 hover:text-primary-600">
           💬 {nombreCommentaires}
         </button>

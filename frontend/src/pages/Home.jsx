@@ -10,6 +10,7 @@ import TrendingWidget from '../components/TrendingWidget';
 import MembresEnVueWidget from '../components/MembresEnVueWidget';
 import GalerieWidget from '../components/GalerieWidget';
 import ConceptCarousel from '../components/ConceptCarousel';
+import PhotoMarquee from '../components/PhotoMarquee';
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
@@ -56,7 +57,7 @@ export default function Home() {
             <span className="inline-block rounded-full bg-primary-50 dark:bg-primary-900/30 px-4 py-1.5 text-xs font-bold text-primary-700 dark:text-primary-300 tracking-wide uppercase mb-6">
               École Supérieure Polytechnique — Dakar
             </span>
-            <h1 className="font-display text-4xl sm:text-5xl font-extrabold text-primary-800 dark:text-white leading-tight">
+            <h1 className="font-display text-4xl sm:text-5xl font-extrabold leading-tight bg-gradient-to-r from-primary-700 via-primary-600 to-violet-600 dark:from-primary-300 dark:via-primary-400 dark:to-violet-400 bg-clip-text text-transparent">
               {t('home_hero_title')}
             </h1>
             <p className="mt-5 text-base text-gray-600 dark:text-gray-300 max-w-xl leading-relaxed">
@@ -95,6 +96,11 @@ export default function Home() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* BANDE PHOTOS DÉFILANTES */}
+      <section className="py-8 bg-gray-50 dark:bg-gray-900">
+        <PhotoMarquee />
       </section>
 
       {/* STRUCTURES CAROUSEL */}

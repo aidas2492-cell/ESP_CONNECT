@@ -3,6 +3,20 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const { User } = require('../models');
 
+// Domaines autorisés à l'inscription (étudiants/personnel de l'ESP uniquement).
+// Configurable via .env, ex: ALLOWED_EMAIL_DOMAINS=esp.sn,etu.esp.sn
+// Laissez vide dans .env pour désactiver la restriction (utile en dev/démo).
+const domainesAutorises = (process.env.ALLOWED_EMAIL_DOMAINS || '')
+  .split(',')
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean);
+
+const emailAutorise = (email) => {
+  if (domainesAutorises.length === 0) return true; // restriction désactivée
+  const domaine = email.split('@')[1]?.toLowerCase();
+  return domainesAutorises.includes(domaine);
+};
+
 const genererToken = (user) => {
   return jwt.sign(
     { id: user.id, role: user.role, email: user.email },
@@ -31,6 +45,12 @@ exports.register = async (req, res) => {
 
   try {
     const { nom, prenom, email, password, telephone } = req.body;
+
+    if (!emailAutorise(email)) {
+      return res.status(403).json({
+        message: `L'inscription est réservée aux adresses email de l'ESP (${domainesAutorises.map((d) => '@' + d).join(', ')}).`,
+      });
+    }
 
     const existant = await User.findOne({ where: { email } });
     if (existant) {

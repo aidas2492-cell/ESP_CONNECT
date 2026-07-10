@@ -19,8 +19,8 @@ export default {
         },
       },
       fontFamily: {
-        display: ['"Poppins"', 'sans-serif'],
-        body: ['"Inter"', 'sans-serif'],
+        display: ['"Space Grotesk"', 'sans-serif'],
+        body: ['"Plus Jakarta Sans"', 'sans-serif'],
       },
       animation: {
         marquee: 'marquee 30s linear infinite',

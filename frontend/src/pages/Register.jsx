@@ -72,7 +72,8 @@ export default function Register() {
           </div>
           <div>
             <label className="label">{t('field_email')}</label>
-            <input type="email" required className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <input type="email" required className="input" placeholder="prenom.nom@esp.sn" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <p className="text-xs text-gray-400 mt-1">Réservé aux adresses email de l'ESP.</p>
           </div>
           <div>
             <label className="label">{t('field_telephone')}</label>

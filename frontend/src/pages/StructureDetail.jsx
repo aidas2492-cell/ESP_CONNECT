@@ -25,6 +25,9 @@ export default function StructureDetail() {
   const [joinModal, setJoinModal] = useState(false);
   const [joinMessage, setJoinMessage] = useState('');
   const [joining, setJoining] = useState(false);
+  const [claimModal, setClaimModal] = useState(false);
+  const [claimMessage, setClaimMessage] = useState('');
+  const [claiming, setClaiming] = useState(false);
 
   const load = async () => {
     try {
@@ -58,6 +61,21 @@ export default function StructureDetail() {
     }
   };
 
+  const demanderPresidence = async () => {
+    setClaiming(true);
+    try {
+      await api.post(`/structures/${id}/adhesions`, { role_souhaite: 'president', message: claimMessage.trim() || undefined });
+      showToast('Demande envoyée. Un administrateur va l’examiner.', 'success');
+      setClaimModal(false);
+      setClaimMessage('');
+      load();
+    } catch (err) {
+      showToast(err.response?.data?.message || t('msg_generic_error'), 'error');
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   const quitterStructure = async () => {
     try {
       await api.put(`/structures/${id}/quitter`);
@@ -80,6 +98,8 @@ export default function StructureDetail() {
   const estMembreActif = monAdhesion?.statut === 'active';
   const estPresident = estMembreActif && monAdhesion?.role_structure === 'president';
   const estEnAttente = monAdhesion?.statut === 'en_attente';
+  const president = (structure.adhesions || []).find((a) => a.role_structure === 'president');
+  const posteVacant = !president;
 
   return (
     <div>
@@ -143,7 +163,17 @@ export default function StructureDetail() {
 
         <aside className="space-y-4">
           <div className="card p-6">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">👥 {structure.adhesions?.length ?? 0} membre(s)</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">👥 {structure.adhesions?.length ?? 0} membre(s)</p>
+
+            {posteVacant ? (
+              <p className="text-sm mb-4 flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                👑 Président : <span className="font-semibold">à désigner</span>
+              </p>
+            ) : (
+              <p className="text-sm mb-4 text-gray-500 dark:text-gray-400">
+                👑 Président : <span className="font-semibold text-gray-800 dark:text-gray-200">{president.utilisateur?.prenom} {president.utilisateur?.nom}</span>
+              </p>
+            )}
 
             {!user && (
               <Link to="/connexion" state={{ from: `/structures/${id}` }} className="btn-primary w-full">
@@ -165,13 +195,24 @@ export default function StructureDetail() {
 
             {user && estEnAttente && (
               <button disabled className="btn-secondary w-full opacity-60 cursor-not-allowed">
-                {t('btn_pending')}
+                {monAdhesion?.role_structure === 'president' ? 'Demande de présidence envoyée' : t('btn_pending')}
               </button>
             )}
 
             {user && !monAdhesion && (
               <button onClick={() => setJoinModal(true)} className="btn-primary w-full">
                 {t('btn_join')}
+              </button>
+            )}
+
+            {user && posteVacant && !monAdhesion && (
+              <button onClick={() => setClaimModal(true)} className="btn-secondary w-full mt-2">
+                👑 Demander à devenir président
+              </button>
+            )}
+            {user && posteVacant && estMembreActif && !estPresident && (
+              <button onClick={() => setClaimModal(true)} className="btn-secondary w-full mt-2">
+                👑 Demander à devenir président
               </button>
             )}
           </div>
@@ -220,6 +261,28 @@ export default function StructureDetail() {
           onChange={(e) => setJoinMessage(e.target.value)}
         />
         <p className="text-right text-xs text-gray-400 mt-1">{joinMessage.length}/300</p>
+      </Modal>
+
+      <Modal
+        open={claimModal}
+        title={`Devenir président — ${structure.nom}`}
+        onClose={() => setClaimModal(false)}
+        onConfirm={demanderPresidence}
+        confirmLabel={claiming ? '...' : 'Envoyer la demande'}
+      >
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+          Le poste de président de cette structure est actuellement à désigner. Votre demande sera examinée par un administrateur.
+        </p>
+        <label className="label">Message (optionnel)</label>
+        <textarea
+          rows={3}
+          maxLength={300}
+          className="input"
+          placeholder="Pourquoi souhaitez-vous devenir président de cette structure ?"
+          value={claimMessage}
+          onChange={(e) => setClaimMessage(e.target.value)}
+        />
+        <p className="text-right text-xs text-gray-400 mt-1">{claimMessage.length}/300</p>
       </Modal>
     </div>
   );

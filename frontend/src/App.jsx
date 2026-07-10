@@ -10,6 +10,8 @@ import Register from './pages/Register';
 import Structures from './pages/Structures';
 import Feed from './pages/Feed';
 import Messages from './pages/Messages';
+import Profile from './pages/Profile';
+import Network from './pages/Network';
 import StructureDetail from './pages/StructureDetail';
 import Events from './pages/Events';
 import EventDetail from './pages/EventDetail';
@@ -36,6 +38,8 @@ export default function App() {
 
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+          <Route path="/profil/:id" element={<Profile />} />
+          <Route path="/reseau" element={<ProtectedRoute><Network /></ProtectedRoute>} />
           <Route path="/tableau-de-bord" element={<ProtectedRoute><MemberDashboard /></ProtectedRoute>} />
           <Route path="/president/:structureId" element={<ProtectedRoute><PresidentDashboard /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />

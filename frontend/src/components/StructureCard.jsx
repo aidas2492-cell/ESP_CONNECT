@@ -32,6 +32,11 @@ export default function StructureCard({ structure }) {
         <span className={`absolute top-3 left-3 badge ${typeColors[structure.type] || typeColors.club}`}>
           {t(`type_${structure.type}`)}
         </span>
+        {!structure.president_id && (
+          <span className="absolute top-3 right-3 badge bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+            👑 Président à désigner
+          </span>
+        )}
       </div>
       <div className="p-4 flex flex-col gap-2 flex-1">
         <h3 className="font-display font-semibold text-gray-900 dark:text-white line-clamp-1">{structure.nom}</h3>

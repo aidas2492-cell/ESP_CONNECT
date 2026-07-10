@@ -14,6 +14,7 @@ const optionalAuth = async (req, res, next) => {
 router.get('/', structureController.getAllStructures);
 router.get('/mes-structures', authenticate, structureController.mesStructures);
 router.get('/peut-creer', authenticate, structureController.peutCreerStructure);
+router.get('/demandes-presidence', authenticate, isAdmin, structureController.demandesPresidenceEnAttente);
 router.get('/:id', optionalAuth, structureController.getStructureById);
 router.post('/', authenticate, upload.single('logo'), structureController.createStructure);
 router.put('/:id', authenticate, isPresident, upload.single('logo'), structureController.updateStructure);

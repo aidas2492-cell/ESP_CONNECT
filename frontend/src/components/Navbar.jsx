@@ -82,6 +82,9 @@ export default function Navbar() {
 
           {user ? (
             <>
+              <Link to="/reseau" className="hidden sm:block rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" title="Mon réseau">
+                🤝
+              </Link>
               <Link to="/messages" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" title="Messages">
                 💬
               </Link>
@@ -108,6 +111,9 @@ export default function Navbar() {
                     className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1"
                     onMouseLeave={() => setMenuOpen(false)}
                   >
+                    <Link to="/profil/moi" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                      Voir mon profil
+                    </Link>
                     <Link to={roleHomePath(user)} onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
                       {t('nav_dashboard')}
                     </Link>

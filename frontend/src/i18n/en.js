@@ -77,6 +77,7 @@ export default {
 
   tab_overview: 'Overview',
   tab_structures: 'Structures',
+  tab_presidence: 'Presidency requests',
   tab_members: 'Members',
   tab_requests: 'Requests',
   tab_events: 'Events',

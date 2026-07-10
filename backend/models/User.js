@@ -48,6 +48,30 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
   },
+  photo_couverture: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  bio: {
+    // "Titre" façon LinkedIn, ex: "Étudiant en Génie Informatique @ ESP Dakar"
+    type: DataTypes.STRING(160),
+    allowNull: true,
+  },
+  a_propos: {
+    // Paragraphe "À propos" plus long
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  competences: {
+    // Liste de compétences façon LinkedIn, ex: ["React","Gestion de projet"]
+    type: DataTypes.JSON,
+    defaultValue: [],
+  },
+  promotion: {
+    // Ex: "2024CSED" — utile pour le réseau alumni
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 });
 
 module.exports = User;

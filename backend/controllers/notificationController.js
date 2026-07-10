@@ -1,14 +1,25 @@
 const { Notification } = require('../models');
 
-// GET /api/notifications — l'utilisateur connecté consulte ses notifications
+// GET /api/notifications?categorie= — l'utilisateur connecté consulte ses notifications,
+// avec un filtre optionnel par catégorie (mention/reaction/invitation/general)
 exports.getMyNotifications = async (req, res) => {
   try {
+    const where = { user_id: req.user.id };
+    if (req.query.categorie && req.query.categorie !== 'toutes') {
+      where.categorie = req.query.categorie;
+    }
+
     const notifications = await Notification.findAll({
-      where: { user_id: req.user.id },
+      where,
       order: [['date_envoie', 'DESC']],
     });
-    const nonLues = notifications.filter((n) => !n.lue).length;
-    return res.json({ notifications, nonLues });
+    const toutes = await Notification.findAll({ where: { user_id: req.user.id }, attributes: ['categorie', 'lue'] });
+    const nonLues = toutes.filter((n) => !n.lue).length;
+
+    const compteurParCategorie = { mention: 0, reaction: 0, invitation: 0, general: 0 };
+    toutes.forEach((n) => { if (!n.lue) compteurParCategorie[n.categorie] = (compteurParCategorie[n.categorie] || 0) + 1; });
+
+    return res.json({ notifications, nonLues, compteurParCategorie });
   } catch (error) {
     return res.status(500).json({ message: 'Erreur lors de la récupération des notifications.', error: error.message });
   }

@@ -14,6 +14,7 @@ const PostComment = require('./PostComment');
 const DMConversation = require('./DMConversation');
 const DMParticipant = require('./DMParticipant');
 const DMMessage = require('./DMMessage');
+const Connection = require('./Connection');
 
 // --- Utilisateur <-> Structure via Adhesion (relation "adhère à") ---
 User.belongsToMany(Structure, { through: Adhesion, foreignKey: 'user_id', as: 'structures' });
@@ -84,6 +85,12 @@ DMMessage.belongsTo(DMConversation, { foreignKey: 'conversation_id', as: 'conver
 User.hasMany(DMMessage, { foreignKey: 'user_id', as: 'mesMessagesDM' });
 DMMessage.belongsTo(User, { foreignKey: 'user_id', as: 'auteur' });
 
+// --- Connexions entre membres (réseau façon LinkedIn) ---
+User.hasMany(Connection, { foreignKey: 'demandeur_id', as: 'connexionsEnvoyees' });
+Connection.belongsTo(User, { foreignKey: 'demandeur_id', as: 'demandeur' });
+User.hasMany(Connection, { foreignKey: 'destinataire_id', as: 'connexionsRecues' });
+Connection.belongsTo(User, { foreignKey: 'destinataire_id', as: 'destinataire' });
+
 module.exports = {
   sequelize,
   User,
@@ -101,4 +108,5 @@ module.exports = {
   DMConversation,
   DMParticipant,
   DMMessage,
+  Connection,
 };

@@ -16,23 +16,26 @@ export default function AdminDashboard() {
   const [structures, setStructures] = useState([]);
   const [events, setEvents] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [demandesPresidence, setDemandesPresidence] = useState([]);
   const [search, setSearch] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
 
   const loadAll = async () => {
     try {
-      const [statsRes, usersRes, structuresRes, eventsRes, logsRes] = await Promise.all([
+      const [statsRes, usersRes, structuresRes, eventsRes, logsRes, demandesRes] = await Promise.all([
         api.get('/stats/admin'),
         api.get('/users'),
         api.get('/structures'),
         api.get('/events'),
         api.get('/stats/journal'),
+        api.get('/structures/demandes-presidence'),
       ]);
       setStats(statsRes.data);
       setUsers(usersRes.data.users || []);
       setStructures(structuresRes.data.structures || []);
       setEvents(eventsRes.data.evenements || []);
       setLogs(logsRes.data.logs || []);
+      setDemandesPresidence(demandesRes.data.demandes || []);
     } catch {
       /* silencieux */
     }
@@ -44,9 +47,20 @@ export default function AdminDashboard() {
     { key: 'overview', icon: '📊', labelKey: 'tab_overview' },
     { key: 'users', icon: '👥', labelKey: 'tab_users' },
     { key: 'structures', icon: '🏛️', labelKey: 'tab_structures' },
+    { key: 'demandes_presidence', icon: '👑', labelKey: 'tab_presidence', badge: demandesPresidence.length },
     { key: 'events', icon: '📅', labelKey: 'tab_events' },
     { key: 'log', icon: '🧾', labelKey: 'tab_activity_log' },
   ];
+
+  const traiterPresidence = async (id, decision) => {
+    try {
+      await api.put(`/adhesions/${id}`, { decision });
+      showToast(decision === 'accepter' ? 'Présidence validée.' : 'Demande refusée.', 'success');
+      loadAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Erreur.', 'error');
+    }
+  };
 
   const changerRole = async (id, role) => {
     try {
@@ -176,6 +190,9 @@ export default function AdminDashboard() {
                         {s.est_organe_central && (
                           <span className="badge bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">👑 Organe central (CEE)</span>
                         )}
+                        {!s.president_id && (
+                          <span className="badge bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">Président à désigner</span>
+                        )}
                       </p>
                       <p className="text-xs text-gray-400">{t(`type_${s.type}`)} · {s.nombre_membres} membres</p>
                     </div>
@@ -190,6 +207,29 @@ export default function AdminDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {tab === 'demandes_presidence' && (
+            <div className="card divide-y divide-gray-100 dark:divide-gray-700">
+              {demandesPresidence.length === 0 && (
+                <p className="p-6 text-sm text-gray-400">Aucune demande de présidence en attente.</p>
+              )}
+              {demandesPresidence.map((d) => (
+                <div key={d.id} className="p-4 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900 dark:text-white">
+                      {d.utilisateur?.prenom} {d.utilisateur?.nom} <span className="text-gray-400 font-normal">souhaite présider</span> {d.structure?.nom}
+                    </p>
+                    <p className="text-xs text-gray-400">{d.utilisateur?.email}</p>
+                    {d.message && <p className="text-xs italic text-gray-500 dark:text-gray-400 mt-1 max-w-md">"{d.message}"</p>}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => traiterPresidence(d.id, 'accepter')} className="btn-primary !px-3 !py-1.5 text-xs">{t('btn_accept')}</button>
+                    <button onClick={() => traiterPresidence(d.id, 'rejeter')} className="btn-secondary !px-3 !py-1.5 text-xs">{t('btn_reject')}</button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

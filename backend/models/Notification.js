@@ -27,6 +27,11 @@ const Notification = sequelize.define('Notification', {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
   },
+  categorie: {
+    // Permet de filtrer les notifications par onglet, façon LinkedIn.
+    type: DataTypes.ENUM('mention', 'reaction', 'invitation', 'general'),
+    defaultValue: 'general',
+  },
 });
 
 module.exports = Notification;

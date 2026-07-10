@@ -4,8 +4,12 @@ import PostComposer from '../components/PostComposer';
 import PostCard from '../components/PostCard';
 import TrendingWidget from '../components/TrendingWidget';
 import MembresEnVueWidget from '../components/MembresEnVueWidget';
+import ProfileSummaryCard from '../components/ProfileSummaryCard';
+import SuggestionsWidget from '../components/SuggestionsWidget';
+import { useAuth } from '../context/AuthContext';
 
 export default function Feed() {
+  const { user } = useAuth();
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -29,14 +33,24 @@ export default function Feed() {
   useEffect(() => { charger(1); }, []);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6 py-10">
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-bold text-gray-900 dark:text-white">Fil du campus</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">Ce qui se passe en ce moment à l'ESP</p>
-      </div>
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_300px] gap-6 items-start">
+        {/* Colonne gauche : résumé de profil */}
+        <aside className="hidden lg:block lg:sticky lg:top-20 space-y-6">
+          {user ? <ProfileSummaryCard /> : (
+            <div className="card p-5 text-sm text-gray-500 dark:text-gray-400">
+              Connectez-vous pour publier et interagir avec le fil du campus.
+            </div>
+          )}
+        </aside>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-5">
+        {/* Colonne centrale : fil de publications */}
+        <div className="space-y-5 min-w-0">
+          <div className="mb-2">
+            <h1 className="font-display text-2xl font-bold text-gray-900 dark:text-white">Fil du campus</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Ce qui se passe en ce moment à l'ESP</p>
+          </div>
+
           <PostComposer onPosted={(post) => setPosts((prev) => [post, ...prev])} />
 
           {loading && posts.length === 0 && (
@@ -62,7 +76,9 @@ export default function Feed() {
           )}
         </div>
 
-        <aside className="space-y-6">
+        {/* Colonne droite : tendances, membres en vue, suggestions de réseau */}
+        <aside className="space-y-6 lg:sticky lg:top-20">
+          {user && <SuggestionsWidget />}
           <TrendingWidget />
           <MembresEnVueWidget />
         </aside>

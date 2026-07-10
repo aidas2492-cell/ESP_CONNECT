@@ -26,16 +26,20 @@ exports.getAllStructures = async (req, res) => {
       order: [['date_creation', 'DESC']],
     });
 
-    const result = structures.map((s) => ({
-      id: s.id,
-      nom: s.nom,
-      description: s.description,
-      type: s.type,
-      logo: s.logo,
-      date_creation: s.date_creation,
-      nombre_membres: s.adhesions ? s.adhesions.length : 0,
-      est_organe_central: s.est_organe_central,
-    }));
+    const result = structures.map((s) => {
+      const president = (s.adhesions || []).find((a) => a.role_structure === 'president');
+      return {
+        id: s.id,
+        nom: s.nom,
+        description: s.description,
+        type: s.type,
+        logo: s.logo,
+        date_creation: s.date_creation,
+        nombre_membres: s.adhesions ? s.adhesions.length : 0,
+        est_organe_central: s.est_organe_central,
+        president_id: president ? president.user_id : null,
+      };
+    });
 
     return res.json({ structures: result });
   } catch (error) {
@@ -116,13 +120,22 @@ exports.createStructure = async (req, res) => {
       createur_id: req.user.id,
     });
 
-    await Adhesion.create({
-      user_id: req.user.id,
-      structure_id: structure.id,
-      role_structure: 'president',
-      statut: 'active',
-      date_traitement: new Date(),
-    });
+    // Quand un étudiant (président du CEE) crée une structure, il en devient
+    // automatiquement le président. Quand c'est l'Administrateur qui la crée
+    // (par exemple pour préparer un club à l'avance), elle reste "à désigner"
+    // jusqu'à ce qu'un étudiant en fasse la demande et soit validé.
+    let message = 'Structure créée avec succès. Vous en êtes le président.';
+    if (req.user.role !== 'admin') {
+      await Adhesion.create({
+        user_id: req.user.id,
+        structure_id: structure.id,
+        role_structure: 'president',
+        statut: 'active',
+        date_traitement: new Date(),
+      });
+    } else {
+      message = 'Structure créée avec succès. Elle apparaîtra comme "Président à désigner" jusqu\'à ce qu\'un étudiant en fasse la demande.';
+    }
 
     await logActivite({
       userId: req.user.id,
@@ -130,7 +143,7 @@ exports.createStructure = async (req, res) => {
       details: `${req.user.prenom} ${req.user.nom} a créé la structure "${nom}"`,
     });
 
-    return res.status(201).json({ message: 'Structure créée avec succès. Vous en êtes le président.', structure });
+    return res.status(201).json({ message, structure });
   } catch (error) {
     return res.status(500).json({ message: 'Erreur lors de la création de la structure.', error: error.message });
   }
@@ -231,6 +244,7 @@ exports.deleteStructure = async (req, res) => {
 };
 
 // POST /api/structures/:id/adhesions — cas d'utilisation "Adhérer une structure"
+// (ou "Demander à devenir président" si le poste est encore à désigner)
 exports.demanderAdhesion = async (req, res) => {
   try {
     const structureId = req.params.id;
@@ -245,9 +259,22 @@ exports.demanderAdhesion = async (req, res) => {
       return res.status(409).json({ message: 'Demande déjà existante ou adhésion active.' });
     }
 
+    // On ne peut demander le rôle de président que si le poste est encore vacant.
+    let roleDemande = 'membre';
+    if (req.body.role_souhaite === 'president') {
+      const presidentExistant = await Adhesion.findOne({
+        where: { structure_id: structureId, role_structure: 'president', statut: 'active' },
+      });
+      if (presidentExistant) {
+        return res.status(409).json({ message: 'Cette structure a déjà un président désigné.' });
+      }
+      roleDemande = 'president';
+    }
+
     let adhesion;
     if (existante) {
       existante.statut = 'en_attente';
+      existante.role_structure = roleDemande;
       existante.date_demande = new Date();
       existante.date_traitement = null;
       existante.message = req.body.message || null;
@@ -256,23 +283,39 @@ exports.demanderAdhesion = async (req, res) => {
       adhesion = await Adhesion.create({
         user_id: req.user.id,
         structure_id: structureId,
-        role_structure: 'membre',
+        role_structure: roleDemande,
         statut: 'en_attente',
         message: req.body.message || null,
       });
     }
 
-    // Notifie le(s) président(s) de la structure
+    // Notifie le(s) président(s) actif(s) de la structure ; si aucun (poste à
+    // désigner), notifie l'Administrateur qui doit alors valider la demande.
     const presidents = await Adhesion.findAll({
       where: { structure_id: structureId, role_structure: 'president', statut: 'active' },
     });
-    for (const p of presidents) {
-      await creerNotification({
-        userId: p.user_id,
-        titre: 'Nouvelle demande d’adhésion',
-        message: `${req.user.prenom} ${req.user.nom} souhaite rejoindre "${structure.nom}".`,
-        lien: `/president/structures/${structureId}/demandes`,
-      });
+
+    if (presidents.length > 0) {
+      for (const p of presidents) {
+        await creerNotification({
+          userId: p.user_id,
+          titre: roleDemande === 'president' ? 'Demande pour devenir président' : 'Nouvelle demande d’adhésion',
+          message: `${req.user.prenom} ${req.user.nom} souhaite ${roleDemande === 'president' ? 'devenir président de' : 'rejoindre'} "${structure.nom}".`,
+          lien: `/president/structures/${structureId}/demandes`,
+          categorie: 'invitation',
+        });
+      }
+    } else if (roleDemande === 'president') {
+      const admins = await User.findAll({ where: { role: 'admin' } });
+      for (const a of admins) {
+        await creerNotification({
+          userId: a.id,
+          titre: 'Demande pour devenir président',
+          message: `${req.user.prenom} ${req.user.nom} souhaite devenir président de "${structure.nom}" (poste à désigner).`,
+          lien: `/admin`,
+          categorie: 'invitation',
+        });
+      }
     }
 
     return res.status(201).json({ message: 'Demande d’adhésion envoyée. En attente de validation.', adhesion });
@@ -291,7 +334,14 @@ exports.traiterAdhesion = async (req, res) => {
 
     if (!adhesion) return res.status(404).json({ message: 'Demande introuvable.' });
 
-    if (req.user.role !== 'admin') {
+    // Les demandes pour devenir président (poste vacant) ne peuvent être
+    // validées que par un administrateur — il n'existe par définition aucun
+    // président en poste pour les traiter lui-même.
+    if (adhesion.role_structure === 'president' && adhesion.statut === 'en_attente') {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Seul un administrateur peut valider une demande de présidence.' });
+      }
+    } else if (req.user.role !== 'admin') {
       const estPresident = await Adhesion.findOne({
         where: {
           user_id: req.user.id,
@@ -316,6 +366,7 @@ exports.traiterAdhesion = async (req, res) => {
         decision === 'accepter'
           ? `Votre demande pour "${adhesion.structure.nom}" a été acceptée. Bienvenue !`
           : `Votre demande pour "${adhesion.structure.nom}" a été refusée.`,
+      categorie: 'invitation',
     });
 
     await sendEmail({
@@ -414,6 +465,24 @@ exports.informerMembres = async (req, res) => {
     return res.json({ message: `Message envoyé à ${membres.length} membre(s).` });
   } catch (error) {
     return res.status(500).json({ message: "Erreur lors de l'envoi de l'information.", error: error.message });
+  }
+};
+
+// GET /api/structures/demandes-presidence — toutes les demandes de présidence
+// en attente, tous clubs confondus (réservé à l'Administrateur)
+exports.demandesPresidenceEnAttente = async (req, res) => {
+  try {
+    const demandes = await Adhesion.findAll({
+      where: { role_structure: 'president', statut: 'en_attente' },
+      include: [
+        { model: User, as: 'utilisateur', attributes: ['id', 'nom', 'prenom', 'email', 'photo'] },
+        { model: Structure, as: 'structure', attributes: ['id', 'nom', 'logo'] },
+      ],
+      order: [['date_demande', 'ASC']],
+    });
+    return res.json({ demandes });
+  } catch (error) {
+    return res.status(500).json({ message: 'Erreur lors de la récupération des demandes.', error: error.message });
   }
 };
 
