@@ -4,12 +4,16 @@ Application complète (React + Node.js/Express + MySQL) permettant aux clubs, am
 et commissions de l'ESP de gérer leurs membres, événements, annonces, cotisations et
 messagerie de groupe en temps réel.
 
+Le schéma de la base de données est versionné dans `db/schema.sql`, visible et
+lisible directement sur GitHub — voir `db/README.md` pour plus de détails.
+
 ## 📁 Structure du projet
 
 ```
 espconnect/
 ├── backend/     → API Express (REST + WebSocket)
-└── frontend/    → Application React (Vite + Tailwind)
+├── frontend/    → Application React (Vite + Tailwind)
+└── db/          → Schéma SQL de la base de données (documentation + création manuelle)
 ```
 
 ---
@@ -31,14 +35,19 @@ Si Node.js ou MySQL ne sont pas installés :
 
 ## 2. Créer la base de données
 
-Ouvrez un terminal MySQL (`mysql -u root -p`) et exécutez :
+Deux façons de faire, au choix :
 
+**Option A — automatique (recommandé)** : créez juste une base vide, les tables
+se créent toutes seules au démarrage du serveur (`sequelize.sync`) :
 ```sql
 CREATE DATABASE esp_digital CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Vous n'avez rien d'autre à créer manuellement : les tables sont générées automatiquement
-au démarrage du serveur grâce à Sequelize (`sequelize.sync`).
+**Option B — via le schéma versionné** : exécutez directement le fichier SQL du
+dépôt, qui crée la base et toutes les tables en une seule commande :
+```bash
+mysql -u root -p < db/schema.sql
+```
 
 ---
 
@@ -209,7 +218,10 @@ Une architecture simple et gratuite/peu coûteuse pour démarrer :
 
 - **`ECONNREFUSED` / le frontend n'arrive pas à joindre l'API** → vérifiez que le
   backend tourne bien sur le port 5000 (`npm run dev` dans `backend/`).
-- **Erreur MySQL `Access denied`** → vérifiez `DB_USER` / `DB_PASSWORD` dans `.env`.
+- **Erreur MySQL `Access denied`** → vérifiez `DB_USER` / `DB_PASSWORD` dans `.env`,
+  et que le fichier `.env` est bien lu (voir `node scripts/checkEnv.js`).
+- **`Unknown database 'esp_digital'`** → la base n'existe pas encore, créez-la
+  avec l'option A ou B de la section 2.
 - **Le chat en temps réel ne se connecte pas** → vérifiez que `/socket.io` est bien
   proxifié (dev) ou que `VITE_SOCKET_URL` pointe vers le bon backend (prod), et que
   `CLIENT_URL` côté backend correspond à l'URL exacte du frontend.
